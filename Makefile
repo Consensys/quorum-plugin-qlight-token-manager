@@ -41,7 +41,7 @@ dist: clean build zip
 build: checkfmt
 	@mkdir -p ${OUTPUT_DIR}
 	@echo Output to ${OUTPUT_DIR}
-	@CGO_ENABLED=0 go generate -ldflags=${LD_FLAGS} ./...
+	@CGO_ENABLED=0 go run -ldflags=${LD_FLAGS} ./metadata/gen.go
 	@CGO_ENABLED=0 gox \
 		-parallel=2 \
 		-os="${XC_OS}" \
