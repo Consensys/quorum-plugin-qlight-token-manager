@@ -8,12 +8,15 @@ import (
 	"io/ioutil"
 	"log"
 	"path"
+	"runtime"
 )
 
 const metadataFile = "plugin-meta.json"
 
 var (
-	Package    string
+	GitCommit  string
+	GitBranch  string
+	GitRepo    string
 	Version    string
 	Executable string
 	OutputDir  string
@@ -21,8 +24,13 @@ var (
 
 func main() {
 	meta := make(map[string]interface{})
-	meta["name"] = Package
+	meta["name"] = "quorum-plugin-qlight-token-manager"
 	meta["version"] = Version
+	meta["os"] = runtime.GOOS
+	meta["arch"] = runtime.GOARCH
+	meta["gitCommit"] = GitCommit
+	meta["gitBranch"] = GitBranch
+	meta["gitRepo"] = GitRepo
 	meta["entrypoint"] = Executable
 	data, err := json.MarshalIndent(meta, "", "    ")
 	if err != nil {
