@@ -13,6 +13,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -74,6 +75,7 @@ func (h *QlightTokenManagerPluginImpl) GRPCClient(context.Context, *plugin.GRPCB
 
 type config struct {
 	URL, Method                      string
+	TLSSkipVerify                    bool
 	RefreshAnticipationInMillisecond int32
 	Parameters                       map[string]string
 }
@@ -128,16 +130,19 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 	log.Printf("token=%s\n", token)
 	split := strings.Split(token, ".")
 	log.Printf("split=%v\n", split)
+
 	data, err := base64.RawStdEncoding.DecodeString(split[1])
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("json=%s\n", string(data))
+
 	jwt := &JWT{}
 	err = json.Unmarshal(data, jwt)
 	if err != nil {
 		return nil, err
 	}
+
 	log.Printf("expireAt=%v\n", jwt.ExpireAt)
 	expireAt := time.Unix(jwt.ExpireAt, 0)
 	log.Printf("expireAt=%v\n", expireAt)
@@ -145,42 +150,81 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 		log.Println("return current token")
 		return &proto.TokenRefresh_Response{Token: req.GetCurrentToken()}, nil
 	}
+
 	transCfg := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // ignore expired SSL certificates
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: h.cfg.TLSSkipVerify, // ignore expired SSL certificates
+		},
 	}
 	client := &http.Client{Transport: transCfg}
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
 
-	for key, template := range h.cfg.Parameters {
-		fw, err := writer.CreateFormField(key)
+	var body *bytes.Buffer
+	var writer *multipart.Writer
+	var encoded *url.Values
+	if h.cfg.Method == "POST" || h.cfg.Method == "PUT" {
+		body = &bytes.Buffer{}
+		writer = multipart.NewWriter(body)
+		for key, template := range h.cfg.Parameters {
+			fw, err := writer.CreateFormField(key)
+			if err != nil {
+				return nil, err
+			}
+			_, err = io.Copy(fw, strings.NewReader(strings.Replace(template, "${PSI}", req.Psi, -1)))
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		err = writer.Close()
 		if err != nil {
 			return nil, err
 		}
-		_, err = io.Copy(fw, strings.NewReader(strings.Replace(template, "${PSI}", req.Psi, -1)))
+	} else if h.cfg.Method == "GET" {
+		encoded = &url.Values{}
+		for key, template := range h.cfg.Parameters {
+			encoded.Set(key, strings.Replace(template, "${PSI}", req.Psi, -1))
+		}
+	} else { // JSON body encoding
+		body = &bytes.Buffer{}
+		m := make(map[string]string)
+		for key, template := range h.cfg.Parameters {
+			m[key] = strings.Replace(template, "${PSI}", req.Psi, -1)
+		}
+		err = json.NewEncoder(body).Encode(m)
 		if err != nil {
 			return nil, err
 		}
 	}
-	err = writer.Close()
+
+	var reader *bytes.Reader
+	var url string = h.cfg.URL
+	switch {
+	case body != nil:
+		reader = bytes.NewReader(body.Bytes())
+	case encoded != nil:
+		url += "?" + encoded.Encode()
+	}
+
+	request, err := http.NewRequestWithContext(ctx, h.cfg.Method, url, reader)
 	if err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequestWithContext(ctx, h.cfg.Method, h.cfg.URL, bytes.NewReader(body.Bytes()))
-	if err != nil {
-		return nil, err
+	if h.cfg.Method == "POST" || h.cfg.Method == "PUT" {
+		request.Header.Set("Content-Type", writer.FormDataContentType())
 	}
-	request.Header.Set("Content-Type", writer.FormDataContentType())
+
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
+
 	data, err = ioutil.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("ory response=%s\n", string(data))
+
 	oryResp := &OryResp{}
 	err = json.Unmarshal(data, oryResp)
 	if err != nil {
