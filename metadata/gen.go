@@ -23,6 +23,9 @@ var (
 )
 
 func main() {
+	if len(OutputDir) == 0 {
+		OutputDir = "build"
+	}
 	meta := make(map[string]interface{})
 	meta["name"] = "quorum-plugin-qlight-token-manager"
 	meta["version"] = Version
