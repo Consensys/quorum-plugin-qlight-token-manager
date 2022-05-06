@@ -18,7 +18,8 @@ default: clean test build zip
 	@ls ${OUTPUT_DIR}/*
 
 checkfmt: tools
-	@GO_FMT_FILES="$$(goimports -l `find . -name '*.go' | grep -v vendor | grep -v proto`)"; \
+	go vet ./...
+#	@GO_FMT_FILES="$$(goimports -l `find . -name '*.go' | grep -v vendor | grep -v proto`)"; \
 	test -z "$${GO_FMT_FILES}" || ( echo "Please run 'make fixfmt' to format the following files: \n$${GO_FMT_FILES}"; exit 1 )
 
 fixfmt: tools
@@ -40,7 +41,7 @@ dist: clean build zip
 build: checkfmt
 	@mkdir -p ${OUTPUT_DIR}
 	@echo Output to ${OUTPUT_DIR}
-	@CGO_ENABLED=0 go run -ldflags=${LD_FLAGS} ./internal/metadata/gen.go
+	@CGO_ENABLED=0 go generate -ldflags=${LD_FLAGS} ./...
 	@CGO_ENABLED=0 gox \
 		-parallel=2 \
 		-os="${XC_OS}" \
