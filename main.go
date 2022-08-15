@@ -131,17 +131,11 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 	split := strings.Split(token, ".")
 	log.Printf("split=%v\n", split)
 
-	data, err := base64.RawStdEncoding.DecodeString(split[1])
-	if err != nil {
-		return nil, err
-	}
+	data, _ := base64.RawStdEncoding.DecodeString(split[1]) // ignore error, we will refresh anyway in this case
 	log.Printf("json=%s\n", string(data))
 
 	jwt := &JWT{}
-	err = json.Unmarshal(data, jwt)
-	if err != nil {
-		return nil, err
-	}
+	json.Unmarshal(data, jwt) // ignore error, we will refresh anyway in this case
 
 	log.Printf("expireAt=%v\n", jwt.ExpireAt)
 	expireAt := time.Unix(jwt.ExpireAt, 0)
@@ -175,7 +169,7 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 			}
 		}
 
-		err = writer.Close()
+		err := writer.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +184,7 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 		for key, template := range h.cfg.Parameters {
 			m[key] = strings.Replace(template, "${PSI}", req.Psi, -1)
 		}
-		err = json.NewEncoder(body).Encode(m)
+		err := json.NewEncoder(body).Encode(m)
 		if err != nil {
 			return nil, err
 		}
