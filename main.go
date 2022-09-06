@@ -131,7 +131,7 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 	split := strings.Split(token, ".")
 	log.Printf("split=%v\n", split)
 
-	if len(split) < 3 {
+	if len(split) >= 2 {
 		data, _ := base64.RawStdEncoding.DecodeString(split[1]) // ignore error, we will refresh anyway in this case
 		log.Printf("json=%s\n", string(data))
 
