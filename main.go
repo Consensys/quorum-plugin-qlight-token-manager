@@ -131,18 +131,20 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 	split := strings.Split(token, ".")
 	log.Printf("split=%v\n", split)
 
-	data, _ := base64.RawStdEncoding.DecodeString(split[1]) // ignore error, we will refresh anyway in this case
-	log.Printf("json=%s\n", string(data))
+	if len(split) < 3 {
+		data, _ := base64.RawStdEncoding.DecodeString(split[1]) // ignore error, we will refresh anyway in this case
+		log.Printf("json=%s\n", string(data))
 
-	jwt := &JWT{}
-	json.Unmarshal(data, jwt) // ignore error, we will refresh anyway in this case
+		jwt := &JWT{}
+		json.Unmarshal(data, jwt) // ignore error, we will refresh anyway in this case
 
-	log.Printf("expireAt=%v\n", jwt.ExpireAt)
-	expireAt := time.Unix(jwt.ExpireAt, 0)
-	log.Printf("expireAt=%v\n", expireAt)
-	if time.Since(expireAt) < -time.Duration(h.cfg.RefreshAnticipationInMillisecond)*time.Millisecond {
-		log.Println("return current token")
-		return &proto.TokenRefresh_Response{Token: req.GetCurrentToken()}, nil
+		log.Printf("expireAt=%v\n", jwt.ExpireAt)
+		expireAt := time.Unix(jwt.ExpireAt, 0)
+		log.Printf("expireAt=%v\n", expireAt)
+		if time.Since(expireAt) < -time.Duration(h.cfg.RefreshAnticipationInMillisecond)*time.Millisecond {
+			log.Println("return current token")
+			return &proto.TokenRefresh_Response{Token: req.GetCurrentToken()}, nil
+		}
 	}
 
 	transCfg := &http.Transport{
@@ -213,7 +215,7 @@ func (h *QlightTokenManagerPluginImpl) TokenRefresh(ctx context.Context, req *pr
 	}
 	defer response.Body.Close()
 
-	data, err = ioutil.ReadAll(response.Body)
+	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}
